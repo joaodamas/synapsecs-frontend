@@ -1,0 +1,21 @@
+name: HLTV Real-Time Sync
+on:
+  workflow_dispatch: 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run Sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        # Isso diz ao GitHub: "Procure o script dentro desta pasta"
+        run: |
+          cd cs2-prediction-frontend
+          npm install hltv @supabase/supabase-js
+          node sync.js
