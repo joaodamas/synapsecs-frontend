@@ -4,6 +4,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        cs: {
+          dark: '#0a0a0c',
+          card: '#16161a',
+          orange: '#ff6b00',
+          red: '#e11d48'
+        },
         'synapse-black': '#050505',
         'synapse-dark': '#121212',
         'synapse-neon': '#39FF14',
