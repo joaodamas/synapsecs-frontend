@@ -1,0 +1,46 @@
+mutation CreateUser @auth(level: USER) {
+  user_insert(data: {
+    username: "demouser",
+    email: "demo@example.com",
+    createdAt_expr: "request.time",
+    id_expr: "uuidV4()"
+  })
+}
+
+query ListTeams @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  teams {
+    id
+    name
+    logoUrl
+    description
+    region
+  }
+}
+
+mutation CreatePrediction($matchId: UUID!, $predictedWinnerId: UUID!) @auth(level: USER) {
+  prediction_insert(data: {
+    matchId: $matchId,
+    predictedWinnerId: $predictedWinnerId,
+    userId_expr: "auth.uid",
+    createdAt_expr: "request.time",
+    id_expr: "uuidV4()"
+  })
+}
+
+query ListMatches @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  matches {
+    id
+    team1 {
+      name
+      logoUrl
+    }
+    team2 {
+      name
+      logoUrl
+    }
+    matchTime
+    status
+    streamLink
+    tournamentName
+  }
+}

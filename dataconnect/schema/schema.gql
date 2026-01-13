@@ -1,0 +1,40 @@
+type User @table {
+  username: String!
+  createdAt: Timestamp!
+  email: String
+  profilePictureUrl: String
+  bio: String
+}
+
+type Team @table {
+  name: String!
+  region: String!
+  createdAt: Timestamp!
+  logoUrl: String
+  description: String
+}
+
+type Match @table {
+  team1: Team!
+  team2: Team!
+  matchTime: Timestamp!
+  status: String!
+  createdAt: Timestamp!
+  winner: Team
+  tournamentName: String
+  streamLink: String
+}
+
+type Prediction @table {
+  user: User!
+  match: Match!
+  predictedWinner: Team!
+  createdAt: Timestamp!
+  isCorrect: Boolean
+}
+
+type UserFollowTeam @table(key: ["user", "team"]) {
+  user: User!
+  team: Team!
+  followedAt: Timestamp!
+}
