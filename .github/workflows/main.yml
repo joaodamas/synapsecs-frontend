@@ -2,21 +2,31 @@ name: HLTV Real-Time Sync
 
 on:
   schedule:
-    - cron: '0 * * * *' # Corre a cada hora
-  workflow_dispatch: # Permite correr manualmente
+    - cron: '0 * * * *' # Executa a cada hora automaticamente
+  workflow_dispatch: # Permite que você clique no botão "Run workflow" manualmente
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install hltv @supabase/supabase-js
-      - name: Run Sync
+
+      - name: Install Dependencies
+        # Entra na pasta do projeto para instalar as bibliotecas corretamente
+        run: |
+          cd cs2-prediction-frontend
+          npm install hltv @supabase/supabase-js
+
+      - name: Run Sync Script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node cs2-prediction-frontend/sync.js
+        # Entra na pasta e executa o script que agora será encontrado
+        run: |
+          cd cs2-prediction-frontend
+          node sync.js
