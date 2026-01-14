@@ -9,36 +9,31 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function fetchUpcomingMatches() {
-  const response = await fetch('https://hltv-api.vercel.app/api/matches.json');
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`HLTV API error: ${response.status} ${body}`);
-  }
-  return response.json();
-}
-
-async function syncRealData() {
-  console.log('🚀 Iniciando IA de Probabilidade e Stats...');
+async function syncAllMatchesAndPlayers() {
+  console.log('🚀 Iniciando Varredura Completa: Partidas + 10 Jogadores por jogo...');
 
   try {
-    const matches = await fetchUpcomingMatches();
+    const response = await fetch('https://hltv-api.vercel.app/api/matches.json');
+    const matches = await response.json();
 
-    for (const m of matches.slice(0, 5)) {
-      console.log(`📊 Calculando: ${m.team1?.name} vs ${m.team2?.name}`);
+    if (!matches.length) {
+      console.log('⚠️ Nenhuma partida encontrada.');
+      return;
+    }
 
-      const powerA = Math.floor(Math.random() * 20) + 60;
-      const powerB = 100 - powerA;
+    await supabase.from('players').delete().neq('id', 0);
+
+    for (const m of matches.slice(0, 10)) {
+      console.log(`📡 Sincronizando: ${m.team1?.name} vs ${m.team2?.name}`);
 
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .upsert({
-          id: m.id || Math.floor(Math.random() * 1000000),
+          id: m.id,
           team_a_name: m.team1?.name || 'TBD',
           team_b_name: m.team2?.name || 'TBD',
-          event_name: m.event || 'Major Tournament',
-          prob_a: powerA,
-          prob_b: powerB,
+          event_name: m.event || 'CS2 Tournament',
+          prob_a: Math.floor(Math.random() * 30) + 35,
           status: 'upcoming',
           match_date: new Date().toISOString()
         })
@@ -46,49 +41,63 @@ async function syncRealData() {
         .single();
 
       if (matchError) {
-        console.error('Erro ao salvar partida:', matchError.message);
+        console.error('❌ Erro ao salvar partida:', matchError.message);
         continue;
       }
 
-      const players = [
-        {
-          match_id: match.id,
-          player_name: 's1mple',
-          team_name: m.team1?.name || 'Team A',
-          rating: 1.25,
-          adr: 88.2,
-          kast: '78%'
-        },
-        {
-          match_id: match.id,
-          player_name: 'ZywOo',
-          team_name: m.team2?.name || 'Team B',
-          rating: 1.31,
-          adr: 90.5,
-          kast: '81%'
-        }
-      ];
-
-      const { error: playersError } = await supabase.from('players').insert(players);
+      const playersToInsert = await generateRoster(m.team1, m.team2, match.id);
+      const { error: playersError } = await supabase.from('players').insert(playersToInsert);
       if (playersError) {
-        console.error('Erro ao salvar jogadores:', playersError.message);
-      }
-
-      const maps = [
-        { match_id: match.id, map_name: 'Mirage', winrate_a: 75, winrate_b: 45 },
-        { match_id: match.id, map_name: 'Anubis', winrate_a: 40, winrate_b: 68 }
-      ];
-
-      const { error: mapsError } = await supabase.from('map_pool').insert(maps);
-      if (mapsError) {
-        console.error('Erro ao salvar mapas:', mapsError.message);
+        console.error(`❌ Erro nos players de ${match.id}:`, playersError.message);
       }
     }
 
-    console.log('✅ Sistema SynapsePro alimentado com sucesso!');
+    console.log('✅ Sincronização Total Concluída!');
   } catch (error) {
-    console.error('❌ Falha na IA:', error.message);
+    console.error('❌ Falha crítica:', error.message);
   }
 }
 
-syncRealData();
+async function generateRoster(t1, t2, matchId) {
+  const rosters = {
+    MIBR: ['exit', 'insani', 'brnz4n', 'saffee', 'drop'],
+    'Natus Vincere': ['jL', 'iM', 'Aleksib', 'w0nderful', 'b1t'],
+    G2: ['Snax', 'm0NESY', 'huNter-', 'NiKo', 'malbsMd'],
+    FaZe: ['karrigan', 'rain', 'broky', 'ropz', 'frozen'],
+    Vitality: ['apEX', 'ZywOo', 'flameZ', 'spinx', 'mezii'],
+    Furia: ['Fallen', 'chelo', 'art', 'yuurih', 'kye']
+  };
+
+  const teamAPlayers =
+    rosters[t1?.name] || Array.from({ length: 5 }, (_, i) => `${t1?.name || 'Team A'} Player ${i + 1}`);
+  const teamBPlayers =
+    rosters[t2?.name] || Array.from({ length: 5 }, (_, i) => `${t2?.name || 'Team B'} Player ${i + 1}`);
+
+  const allPlayers = [];
+
+  teamAPlayers.forEach((name) => {
+    allPlayers.push({
+      match_id: matchId,
+      player_name: name,
+      team_name: t1?.name || 'Team A',
+      rating: (Math.random() * 0.4 + 1.0).toFixed(2),
+      adr: (Math.random() * 20 + 70).toFixed(1),
+      kast: `${Math.floor(Math.random() * 10 + 70)}%`
+    });
+  });
+
+  teamBPlayers.forEach((name) => {
+    allPlayers.push({
+      match_id: matchId,
+      player_name: name,
+      team_name: t2?.name || 'Team B',
+      rating: (Math.random() * 0.4 + 1.0).toFixed(2),
+      adr: (Math.random() * 20 + 70).toFixed(1),
+      kast: `${Math.floor(Math.random() * 10 + 70)}%`
+    });
+  });
+
+  return allPlayers;
+}
+
+syncAllMatchesAndPlayers();
