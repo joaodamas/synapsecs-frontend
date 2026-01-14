@@ -55,6 +55,31 @@ async function fetchTeamById(teamId) {
   return null;
 }
 
+async function resolveTeamId(team) {
+  if (!team?.name) return null;
+  if (team.id) return team.id;
+
+  const candidates = [
+    `/csgo/teams?filter[name]=${encodeURIComponent(team.name)}`,
+    `/cs2/teams?filter[name]=${encodeURIComponent(team.name)}`
+  ];
+
+  for (const path of candidates) {
+    try {
+      const data = await fetchPandaScore(path);
+      if (Array.isArray(data) && data.length > 0) {
+        return data[0]?.id ?? null;
+      }
+    } catch (error) {
+      if (!String(error.message).includes("404")) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
 function extractTeamRank(team) {
   return (
     team?.ranking ??
@@ -166,9 +191,14 @@ async function syncPandaScore() {
 
       console.log(`🎮 Sincronizando: ${teamA.name} vs ${teamB.name}`);
 
+      const [teamAId, teamBId] = await Promise.all([
+        resolveTeamId(teamA),
+        resolveTeamId(teamB)
+      ]);
+
       const [teamAInfo, teamBInfo] = await Promise.all([
-        fetchTeamById(teamA.id),
-        fetchTeamById(teamB.id)
+        teamAId ? fetchTeamById(teamAId) : null,
+        teamBId ? fetchTeamById(teamBId) : null
       ]);
 
       const rankA = extractTeamRank(teamAInfo);
@@ -180,8 +210,8 @@ async function syncPandaScore() {
           id: match.id,
           team_a_name: teamA.name,
           team_b_name: teamB.name,
-          team_a_id: teamA.id,
-          team_b_id: teamB.id,
+          team_a_id: teamAId,
+          team_b_id: teamBId,
           event_name: match.league?.name || match.serie?.name || 'PandaScore',
           prob_a: 50,
           prob_b: 50,
@@ -201,8 +231,8 @@ async function syncPandaScore() {
 
       await supabase.from('players').delete().eq('match_id', savedMatch.id);
 
-      const rosterA = await getTeamPlayers(teamA.id);
-      const rosterB = await getTeamPlayers(teamB.id);
+      const rosterA = await getTeamPlayers(teamAId);
+      const rosterB = await getTeamPlayers(teamBId);
       console.log(
         `ℹ️ Elencos: ${teamA.name} (${rosterA.length}) | ${teamB.name} (${rosterB.length})`
       );
