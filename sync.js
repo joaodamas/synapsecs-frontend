@@ -40,7 +40,7 @@ async function syncRealData() {
       const teamA = normalizeTeam(match.opponents?.[0]);
       const teamB = normalizeTeam(match.opponents?.[1]);
 
-      await supabase.from('matches').upsert({
+      const { error } = await supabase.from('matches').upsert({
         id: match.id,
         team_a_name: teamA,
         team_b_name: teamB,
@@ -50,6 +50,11 @@ async function syncRealData() {
         prob_b: 50,
         status: match.status || 'upcoming'
       });
+
+      if (error) {
+        console.error(`Erro ao salvar ${teamA} vs ${teamB}:`, error.message);
+        continue;
+      }
 
       console.log(`Sincronizado: ${teamA} vs ${teamB}`);
     }
