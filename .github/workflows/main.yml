@@ -25,4 +25,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         # Executa diretamente na raiz do repositório
-        run: node sync.js
+        run: |
+              cd cs2-prediction-frontend
+              node sync.js
+
