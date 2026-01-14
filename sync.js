@@ -126,9 +126,18 @@ async function syncPandaScore() {
   console.log('📅 Iniciando Sincronização via PandaScore...');
 
   try {
-    const matches = await fetchPandaScore('/csgo/matches/upcoming?per_page=10');
+    const matches = await fetchPandaScore('/csgo/matches/upcoming?per_page=50');
+    const now = Date.now();
+    const fiveDaysFromNow = now + 5 * 24 * 60 * 60 * 1000;
+    const filteredMatches = matches.filter((match) => {
+      const dateValue = match.begin_at || match.scheduled_at;
+      if (!dateValue) return false;
+      const matchTime = new Date(dateValue).getTime();
+      return matchTime >= now && matchTime <= fiveDaysFromNow;
+    });
+    const selectedMatches = (filteredMatches.length ? filteredMatches : matches).slice(0, 10);
 
-    for (const match of matches) {
+    for (const match of selectedMatches) {
       const opponents = match.opponents || [];
       if (opponents.length < 2) continue;
 
