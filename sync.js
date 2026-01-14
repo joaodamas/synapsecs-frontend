@@ -33,14 +33,16 @@ async function getTeamPlayers(teamId) {
   if (teamCache.has(teamId)) return teamCache.get(teamId);
 
   try {
-    const team = await fetchPandaScore(`/csgo/teams/${teamId}`);
-    const roster = (team.players || []).map((player) => ({
-      player_name: player.name,
-      team_name: team.name,
-      rating: null,
-      adr: null,
-      kast: null
-    }));
+    const playersResponse = await fetchPandaScore(`/csgo/teams/${teamId}/players?per_page=20`);
+    const roster = (playersResponse || [])
+      .filter((player) => player.active !== false)
+      .map((player) => ({
+        player_name: player.name,
+        team_name: player.team?.name || player.team_name || null,
+        rating: null,
+        adr: null,
+        kast: null
+      }));
 
     teamCache.set(teamId, roster);
     return roster;
@@ -92,10 +94,13 @@ async function syncPandaScore() {
 
       const rosterA = await getTeamPlayers(teamA.id);
       const rosterB = await getTeamPlayers(teamB.id);
+      console.log(
+        `ℹ️ Elencos: ${teamA.name} (${rosterA.length}) | ${teamB.name} (${rosterB.length})`
+      );
       const players = [...rosterA, ...rosterB].map((player) => ({
         match_id: savedMatch.id,
         player_name: player.player_name,
-        team_name: player.team_name,
+        team_name: player.team_name || (rosterA.includes(player) ? teamA.name : teamB.name),
         rating: player.rating,
         adr: player.adr,
         kast: player.kast
@@ -106,6 +111,8 @@ async function syncPandaScore() {
         if (playersError) {
           console.error('❌ Erro ao salvar players:', playersError.message);
         }
+      } else {
+        console.warn(`⚠️ Sem players para ${teamA.name} vs ${teamB.name}.`);
       }
     }
 
