@@ -28,12 +28,44 @@ async function fetchPandaScore(path) {
   return response.json();
 }
 
+async function fetchTeamById(teamId) {
+  const candidates = [
+    `/csgo/teams/${teamId}`,
+    `/cs2/teams/${teamId}`,
+    `/csgo/teams?filter[id]=${teamId}`,
+    `/cs2/teams?filter[id]=${teamId}`
+  ];
+
+  for (const path of candidates) {
+    try {
+      const data = await fetchPandaScore(path);
+      if (Array.isArray(data)) {
+        if (data.length > 0) return data[0];
+      } else if (data) {
+        return data;
+      }
+    } catch (error) {
+      if (!String(error.message).includes("404")) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
 async function getTeamPlayers(teamId) {
   if (!teamId) return [];
   if (teamCache.has(teamId)) return teamCache.get(teamId);
 
   try {
-    const team = await fetchPandaScore(`/csgo/teams/${teamId}`);
+    const team = await fetchTeamById(teamId);
+    if (!team) {
+      console.warn(`⚠️ Time ${teamId} nao encontrado nos endpoints PandaScore.`);
+      teamCache.set(teamId, []);
+      return [];
+    }
+
     const roster = (team.players || [])
       .filter((player) => player.active !== false)
       .map((player) => ({
