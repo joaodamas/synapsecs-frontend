@@ -133,34 +133,51 @@ export default function App() {
         )}
       </main>
 
-      <aside className="w-80 bg-[#0b0e14] border-l border-gray-800 p-6 overflow-y-auto">
-        <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-6">
-          Performance Individual
+      <aside className="w-80 bg-[#0b0e14] border-l border-white/5 p-6 overflow-y-auto">
+        <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6 italic">
+          Lineups Oficiais
         </h2>
-        <div className="space-y-4">
-          {players.map((p, i) => (
-            <div
-              key={`${p.player_name}-${i}`}
-              className="bg-[#1a1f2b] p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:border-orange-500/50 transition-all"
-            >
-              <div>
-                <div className="text-xs text-gray-500 font-bold">{p.team_name}</div>
-                <div className="font-bold text-white group-hover:text-orange-500">
-                  {p.player_name}
-                </div>
-              </div>
-              <div className="text-right">
-                <div
-                  className={`text-lg font-black ${
-                    Number(p.rating) >= 1.15 ? 'text-green-400' : 'text-gray-400'
-                  }`}
-                >
-                  {p.rating}
-                </div>
-                <div className="text-[10px] text-gray-500 uppercase">Rating</div>
-              </div>
+
+        <div className="space-y-8">
+          <section>
+            <h3 className="text-orange-500 font-black text-xs mb-3 uppercase flex justify-between">
+              {selectedMatch?.team_a_name || 'Time A'}
+              <span className="text-[9px] text-gray-600 italic">Lineup Ativa</span>
+            </h3>
+            <div className="space-y-2">
+              {players
+                .filter((p) => p.team_name === selectedMatch?.team_a_name)
+                .map((p, i) => (
+                  <div
+                    key={`${p.player_name}-${i}`}
+                    className="bg-[#1a1f2b] p-3 rounded-xl border border-white/5 flex justify-between items-center"
+                  >
+                    <span className="text-sm font-bold text-gray-200">{p.player_name}</span>
+                    <span className="text-xs font-black text-green-400">{p.rating}</span>
+                  </div>
+                ))}
             </div>
-          ))}
+          </section>
+
+          <section>
+            <h3 className="text-gray-400 font-black text-xs mb-3 uppercase flex justify-between">
+              {selectedMatch?.team_b_name || 'Time B'}
+              <span className="text-[9px] text-gray-600 italic">Lineup Ativa</span>
+            </h3>
+            <div className="space-y-2">
+              {players
+                .filter((p) => p.team_name === selectedMatch?.team_b_name)
+                .map((p, i) => (
+                  <div
+                    key={`${p.player_name}-${i}`}
+                    className="bg-[#1a1f2b] p-3 rounded-xl border border-white/5 flex justify-between items-center"
+                  >
+                    <span className="text-sm font-bold text-gray-200">{p.player_name}</span>
+                    <span className="text-xs font-black text-gray-500">{p.rating}</span>
+                  </div>
+                ))}
+            </div>
+          </section>
         </div>
       </aside>
     </div>
