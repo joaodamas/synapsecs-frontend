@@ -33,12 +33,12 @@ async function getTeamPlayers(teamId) {
   if (teamCache.has(teamId)) return teamCache.get(teamId);
 
   try {
-    const playersResponse = await fetchPandaScore(`/csgo/teams/${teamId}/players?per_page=20`);
-    const roster = (playersResponse || [])
+    const team = await fetchPandaScore(`/csgo/teams/${teamId}`);
+    const roster = (team.players || [])
       .filter((player) => player.active !== false)
       .map((player) => ({
         player_name: player.name,
-        team_name: player.team?.name || player.team_name || null,
+        team_name: team.name,
         rating: null,
         adr: null,
         kast: null
