@@ -106,7 +106,9 @@ async function getTeamPlayers(teamId) {
     const roster = (team.players || [])
       .filter((player) => player.active !== false)
       .map((player) => ({
+        player_id: player.id,
         player_name: player.name,
+        team_id: team.id,
         team_name: team.name,
         rating: null,
         adr: null,
@@ -119,6 +121,23 @@ async function getTeamPlayers(teamId) {
     console.error(`Erro ao buscar elenco do time ${teamId}:`, error.message);
     teamCache.set(teamId, []);
     return [];
+  }
+}
+
+async function getPlayerStats(matchId, playerId) {
+  if (!matchId || !playerId) return null;
+  try {
+    const data = await fetchPandaScore(
+      `/csgo/matches/${matchId}/players/${playerId}/stats`
+    );
+    if (Array.isArray(data)) return data[0] || null;
+    return data || null;
+  } catch (error) {
+    console.warn(
+      `⚠️ Sem stats para match ${matchId} player ${playerId}:`,
+      error.message
+    );
+    return null;
   }
 }
 
@@ -185,14 +204,20 @@ async function syncPandaScore() {
       console.log(
         `ℹ️ Elencos: ${teamA.name} (${rosterA.length}) | ${teamB.name} (${rosterB.length})`
       );
-      const players = [...rosterA, ...rosterB].map((player) => ({
-        match_id: savedMatch.id,
-        player_name: player.player_name,
-        team_name: player.team_name || (rosterA.includes(player) ? teamA.name : teamB.name),
-        rating: player.rating,
-        adr: player.adr,
-        kast: player.kast
-      }));
+      const roster = [...rosterA, ...rosterB];
+      const players = [];
+
+      for (const player of roster) {
+        const stats = await getPlayerStats(savedMatch.id, player.player_id);
+        players.push({
+          match_id: savedMatch.id,
+          player_name: player.player_name,
+          team_name: player.team_name,
+          rating: stats?.rating ?? stats?.performance?.rating ?? player.rating,
+          adr: stats?.adr ?? stats?.performance?.adr ?? player.adr,
+          kast: stats?.kast ?? stats?.performance?.kast ?? player.kast
+        });
+      }
 
       if (players.length > 0) {
         const { error: playersError } = await supabase.from('players').insert(players);
