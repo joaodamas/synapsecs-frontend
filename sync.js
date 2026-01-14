@@ -1,29 +1,60 @@
-import { HLTV } from 'hltv';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const pandaKey = process.env.PANDASCORE_API_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey || !pandaKey) {
+  throw new Error('Defina SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e PANDASCORE_API_KEY no ambiente.');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+async function fetchUpcomingMatches() {
+  const url = 'https://api.pandascore.co/csgo/matches/upcoming?per_page=10';
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${pandaKey}`
+    }
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`PandaScore error: ${response.status} ${body}`);
+  }
+
+  return response.json();
+}
+
+function normalizeTeam(opponent) {
+  return opponent?.opponent?.name || 'TBD';
+}
 
 async function syncRealData() {
-  console.log('Iniciando Sincronizacao Real HLTV...');
+  console.log('Iniciando sincronizacao via PandaScore...');
 
   try {
-    const matches = await HLTV.getMatches();
-    const upcomingMatches = matches.filter((match) => match.team1 && match.team2).slice(0, 5);
+    const matches = await fetchUpcomingMatches();
 
-    for (const match of upcomingMatches) {
-      console.log(`Sincronizando: ${match.team1.name} vs ${match.team2.name}`);
+    for (const match of matches) {
+      const teamA = normalizeTeam(match.opponents?.[0]);
+      const teamB = normalizeTeam(match.opponents?.[1]);
 
       await supabase.from('matches').upsert({
         id: match.id,
-        team_a_name: match.team1.name,
-        team_b_name: match.team2.name,
-        event_name: match.event?.name || 'Pro Tournament',
-        match_date: new Date(match.date || Date.now()).toISOString(),
+        team_a_name: teamA,
+        team_b_name: teamB,
+        event_name: match.league?.name || 'PandaScore',
+        match_date: match.scheduled_at || new Date().toISOString(),
         prob_a: 50,
-        status: 'upcoming'
+        prob_b: 50,
+        status: match.status || 'upcoming'
       });
+
+      console.log(`Sincronizado: ${teamA} vs ${teamB}`);
     }
-    console.log('Dados reais injetados com sucesso!');
+
+    console.log('Dados injetados com sucesso!');
   } catch (error) {
     console.error('Erro:', error);
   }
