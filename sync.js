@@ -9,15 +9,15 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function sync2026() {
-  console.log('📅 Iniciando Sincronização Temporada 2026...');
+async function syncUpcoming() {
+  console.log('📅 Iniciando Sincronização de Partidas Futuras...');
 
   try {
     const response = await fetch('https://hltv-api.vercel.app/api/matches.json');
     const allMatches = await response.json();
 
-    const startDate = new Date('2026-01-01').getTime();
-    const futureMatches = allMatches
+    const startDate = Date.now();
+    let futureMatches = allMatches
       .filter((m) => {
         const matchDate = new Date(m.date || Date.now()).getTime();
         return matchDate >= startDate && m.team1 && m.team2;
@@ -25,15 +25,16 @@ async function sync2026() {
       .slice(0, 10);
 
     if (futureMatches.length === 0) {
-      console.log('⚠️ Nenhuma partida futura em 2026 encontrada.');
-      return;
+      console.log('⚠️ Nenhuma partida futura encontrada. Usando as 10 primeiras com times definidos.');
+      futureMatches = allMatches.filter((m) => m.team1 && m.team2).slice(0, 10);
+    }
     }
 
     await supabase.from('players').delete().neq('id', 0);
     await supabase.from('matches').delete().neq('id', 0);
 
     for (const m of futureMatches) {
-      console.log(`🎮 Sincronizando 2026: ${m.team1.name} vs ${m.team2.name}`);
+      console.log(`🎮 Sincronizando: ${m.team1.name} vs ${m.team2.name}`);
 
       const { data: match, error: matchError } = await supabase
         .from('matches')
@@ -41,7 +42,7 @@ async function sync2026() {
           id: m.id,
           team_a_name: m.team1.name,
           team_b_name: m.team2.name,
-          event_name: m.event || '2026 World Tour',
+          event_name: m.event || 'CS2 World Tour',
           prob_a: Math.floor(Math.random() * 30) + 35,
           status: 'upcoming',
           match_date: new Date(m.date || Date.now()).toISOString()
@@ -61,7 +62,7 @@ async function sync2026() {
       }
     }
 
-    console.log('✅ Temporada 2026 sincronizada com elencos reais!');
+    console.log('✅ Partidas sincronizadas com elencos reais!');
   } catch (error) {
     console.error('❌ Erro no Sync:', error.message);
   }
@@ -106,4 +107,4 @@ function generateDynamicRoster(t1, t2, matchId) {
   return players;
 }
 
-sync2026();
+syncUpcoming();
