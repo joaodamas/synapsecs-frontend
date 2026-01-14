@@ -3,16 +3,41 @@ import { Badge } from "@/components/ui/badge";
 import { User, Star, TrendingUp, Target } from "lucide-react";
 
 export function PlayerStats({ match, players }) {
-  const teamAPlayers = (players || []).filter((player) => player.team_name === match.teamA.name);
-  const teamBPlayers = (players || []).filter((player) => player.team_name === match.teamB.name);
+  const toNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const sortByRating = (list) =>
+    [...list].sort((a, b) => {
+      const aRating = toNumber(a.rating);
+      const bRating = toNumber(b.rating);
+      if (aRating === null && bRating === null) return 0;
+      if (aRating === null) return 1;
+      if (bRating === null) return -1;
+      return bRating - aRating;
+    });
+
+  const teamAPlayers = sortByRating(
+    (players || []).filter((player) => player.team_name === match.teamA.name)
+  );
+  const teamBPlayers = sortByRating(
+    (players || []).filter((player) => player.team_name === match.teamB.name)
+  );
 
   const teamAAvgRating =
     teamAPlayers.length > 0
-      ? (teamAPlayers.reduce((sum, p) => sum + Number(p.rating || 0), 0) / teamAPlayers.length).toFixed(2)
+      ? (
+          teamAPlayers.reduce((sum, p) => sum + (toNumber(p.rating) ?? 0), 0) /
+          teamAPlayers.length
+        ).toFixed(2)
       : "N/A";
   const teamBAvgRating =
     teamBPlayers.length > 0
-      ? (teamBPlayers.reduce((sum, p) => sum + Number(p.rating || 0), 0) / teamBPlayers.length).toFixed(2)
+      ? (
+          teamBPlayers.reduce((sum, p) => sum + (toNumber(p.rating) ?? 0), 0) /
+          teamBPlayers.length
+        ).toFixed(2)
       : "N/A";
 
   return (
@@ -90,19 +115,33 @@ function PlayerRow({ player }) {
 
       <div className="flex items-center gap-3 text-xs">
         <div className="text-right">
-          <p
-            className={`font-mono font-bold ${
-              Number(player.rating) >= 1.0 ? "text-success" : "text-foreground"
-            }`}
-          >
-            {Number(player.rating || 0).toFixed(2)}
-          </p>
+          {Number.isFinite(Number(player.rating)) ? (
+            <p
+              className={`font-mono font-bold ${
+                Number(player.rating) >= 1.0 ? "text-success" : "text-foreground"
+              }`}
+            >
+              {Number(player.rating).toFixed(2)}
+            </p>
+          ) : (
+            <p className="font-mono text-muted-foreground">—</p>
+          )}
         </div>
         <div className="text-right text-muted-foreground">
-          <p className="font-mono">{Number(player.adr || 0).toFixed(0)}</p>
+          {Number.isFinite(Number(player.adr)) ? (
+            <p className="font-mono">{Number(player.adr).toFixed(0)}</p>
+          ) : (
+            <p className="font-mono">—</p>
+          )}
         </div>
         <div className="text-right text-muted-foreground">
-          <p className="font-mono">{Number(String(player.kast).replace("%", "") || 0).toFixed(0)}%</p>
+          {Number.isFinite(Number(String(player.kast).replace("%", ""))) ? (
+            <p className="font-mono">
+              {Number(String(player.kast).replace("%", "")).toFixed(0)}%
+            </p>
+          ) : (
+            <p className="font-mono">—</p>
+          )}
         </div>
       </div>
     </div>
