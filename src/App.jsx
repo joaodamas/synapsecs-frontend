@@ -31,6 +31,8 @@ export default function App() {
   const [mapPool, setMapPool] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadingIA, setLoadingIA] = useState(false);
+  const [relatorio, setRelatorio] = useState("");
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -156,9 +158,41 @@ export default function App() {
       odds: {
         teamA: match.odds_a ?? 1.9,
         teamB: match.odds_b ?? 1.9
-      }
+      },
+      teamAId: match.team_a_id ?? null,
+      teamBId: match.team_b_id ?? null
     };
   }, [matches, selectedMatchId, mapPool, players]);
+
+  const gerarAnaliseIA = async () => {
+    if (!selectedMatch?.id) return;
+    if (!selectedMatch.teamAId || !selectedMatch.teamBId) {
+      setRelatorio("IDs dos times não encontrados para esta partida.");
+      return;
+    }
+
+    setLoadingIA(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("analyze-match-pro", {
+        body: {
+          matchId: selectedMatch.id,
+          teamAId: selectedMatch.teamAId,
+          teamBId: selectedMatch.teamBId
+        }
+      });
+
+      if (invokeError) {
+        throw invokeError;
+      }
+
+      setRelatorio(data?.analysis || "Análise indisponível.");
+    } catch (invokeError) {
+      console.error("Erro ao gerar análise:", invokeError);
+      setRelatorio("Erro ao gerar a análise. Tente novamente.");
+    } finally {
+      setLoadingIA(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -205,7 +239,12 @@ export default function App() {
         </aside>
 
         <main className="flex-1 p-6 overflow-y-auto">
-          <MatchDetails match={selectedMatch} />
+          <MatchDetails
+            match={selectedMatch}
+            isGenerating={loadingIA}
+            report={relatorio}
+            onGenerateReport={gerarAnaliseIA}
+          />
         </main>
 
         <aside className="w-80 border-l border-border bg-card/30 p-6 overflow-y-auto">

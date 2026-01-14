@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +7,7 @@ import { MapPoolComparison } from "./map-pool-comparison";
 import { HeadToHead } from "./head-to-head";
 import { AiAnalysis } from "./ai-analysis";
 
-export function MatchDetails({ match }) {
-  const [isGenerating, setIsGenerating] = useState(false);
+export function MatchDetails({ match, isGenerating, report, onGenerateReport }) {
   const winner = match.prediction.teamA > match.prediction.teamB ? "A" : "B";
   const winnerTeam = winner === "A" ? match.teamA : match.teamB;
   const winnerPrediction = winner === "A" ? match.prediction.teamA : match.prediction.teamB;
@@ -22,11 +20,6 @@ export function MatchDetails({ match }) {
       hour: "2-digit",
       minute: "2-digit"
     });
-  };
-
-  const handleGenerateReport = () => {
-    setIsGenerating(true);
-    setTimeout(() => setIsGenerating(false), 2000);
   };
 
   return (
@@ -158,7 +151,7 @@ export function MatchDetails({ match }) {
 
       <Button
         className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
-        onClick={handleGenerateReport}
+        onClick={onGenerateReport}
         disabled={isGenerating}
       >
         {isGenerating ? (
@@ -173,6 +166,16 @@ export function MatchDetails({ match }) {
           </>
         )}
       </Button>
+
+      {report && (
+        <Card className="p-4 bg-card border-border">
+          <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-primary" />
+            Relatório Synapse
+          </h3>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{report}</p>
+        </Card>
+      )}
     </div>
   );
 }

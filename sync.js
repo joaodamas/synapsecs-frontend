@@ -180,6 +180,8 @@ async function syncPandaScore() {
           id: match.id,
           team_a_name: teamA.name,
           team_b_name: teamB.name,
+          team_a_id: teamA.id,
+          team_b_id: teamB.id,
           event_name: match.league?.name || match.serie?.name || 'PandaScore',
           prob_a: 50,
           prob_b: 50,
