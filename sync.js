@@ -2,49 +2,83 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const pandaKey = process.env.PANDASCORE_API_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no ambiente.');
+if (!supabaseUrl || !supabaseServiceKey || !pandaKey) {
+  throw new Error('Defina SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e PANDASCORE_API_KEY no ambiente.');
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const teamCache = new Map();
 
-async function syncUpcoming() {
-  console.log('📅 Iniciando Sincronização de Partidas Futuras...');
+const brTeams = new Set(['FURIA', 'Imperial', 'paiN', 'MIBR', 'Legacy', 'Fluxo', 'RED Canids', 'Vasco Esports']);
+
+async function fetchPandaScore(path) {
+  const response = await fetch(`https://api.pandascore.co${path}`, {
+    headers: {
+      Authorization: `Bearer ${pandaKey}`
+    }
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`PandaScore error: ${response.status} ${body}`);
+  }
+
+  return response.json();
+}
+
+async function getTeamPlayers(teamId) {
+  if (!teamId) return [];
+  if (teamCache.has(teamId)) return teamCache.get(teamId);
 
   try {
-    const response = await fetch('https://hltv-api.vercel.app/api/matches.json');
-    const allMatches = await response.json();
+    const team = await fetchPandaScore(`/csgo/teams/${teamId}`);
+    const roster = (team.players || []).map((player) => ({
+      player_name: player.name,
+      team_name: team.name,
+      rating: null,
+      adr: null,
+      kast: null
+    }));
 
-    const startDate = Date.now();
-    let futureMatches = allMatches
-      .filter((m) => {
-        const matchDate = new Date(m.date || Date.now()).getTime();
-        return matchDate >= startDate && m.team1 && m.team2;
-      })
-      .slice(0, 10);
+    teamCache.set(teamId, roster);
+    return roster;
+  } catch (error) {
+    console.error(`Erro ao buscar elenco do time ${teamId}:`, error.message);
+    teamCache.set(teamId, []);
+    return [];
+  }
+}
 
-    if (futureMatches.length === 0) {
-      console.log('⚠️ Nenhuma partida futura encontrada. Usando as 10 primeiras com times definidos.');
-      futureMatches = allMatches.filter((m) => m.team1 && m.team2).slice(0, 10);
-    }
+async function syncPandaScore() {
+  console.log('📅 Iniciando Sincronização via PandaScore...');
 
-    await supabase.from('players').delete().neq('id', 0);
-    await supabase.from('matches').delete().neq('id', 0);
+  try {
+    const matches = await fetchPandaScore('/csgo/matches/upcoming?per_page=10');
 
-    for (const m of futureMatches) {
-      console.log(`🎮 Sincronizando: ${m.team1.name} vs ${m.team2.name}`);
+    for (const match of matches) {
+      const opponents = match.opponents || [];
+      if (opponents.length < 2) continue;
 
-      const { data: match, error: matchError } = await supabase
+      const teamA = opponents[0]?.opponent;
+      const teamB = opponents[1]?.opponent;
+      if (!teamA?.name || !teamB?.name) continue;
+
+      console.log(`🎮 Sincronizando: ${teamA.name} vs ${teamB.name}`);
+
+      const { data: savedMatch, error: matchError } = await supabase
         .from('matches')
         .upsert({
-          id: m.id,
-          team_a_name: m.team1.name,
-          team_b_name: m.team2.name,
-          event_name: m.event || 'CS2 World Tour',
-          prob_a: Math.floor(Math.random() * 30) + 35,
-          status: 'upcoming',
-          match_date: new Date(m.date || Date.now()).toISOString()
+          id: match.id,
+          team_a_name: teamA.name,
+          team_b_name: teamB.name,
+          event_name: match.league?.name || match.serie?.name || 'PandaScore',
+          prob_a: 50,
+          prob_b: 50,
+          status: match.status || 'upcoming',
+          match_date: match.begin_at || match.scheduled_at || new Date().toISOString(),
+          is_brazilian: brTeams.has(teamA.name) || brTeams.has(teamB.name)
         })
         .select()
         .single();
@@ -54,56 +88,31 @@ async function syncUpcoming() {
         continue;
       }
 
-      const roster = generateDynamicRoster(m.team1.name, m.team2.name, match.id);
-      const { error: playersError } = await supabase.from('players').insert(roster);
-      if (playersError) {
-        console.error('❌ Erro ao salvar players:', playersError.message);
+      await supabase.from('players').delete().eq('match_id', savedMatch.id);
+
+      const rosterA = await getTeamPlayers(teamA.id);
+      const rosterB = await getTeamPlayers(teamB.id);
+      const players = [...rosterA, ...rosterB].map((player) => ({
+        match_id: savedMatch.id,
+        player_name: player.player_name,
+        team_name: player.team_name,
+        rating: player.rating,
+        adr: player.adr,
+        kast: player.kast
+      }));
+
+      if (players.length > 0) {
+        const { error: playersError } = await supabase.from('players').insert(players);
+        if (playersError) {
+          console.error('❌ Erro ao salvar players:', playersError.message);
+        }
       }
     }
 
-    console.log('✅ Partidas sincronizadas com elencos reais!');
+    console.log('✅ Partidas sincronizadas via PandaScore!');
   } catch (error) {
     console.error('❌ Erro no Sync:', error.message);
   }
 }
 
-function generateDynamicRoster(t1, t2, matchId) {
-  const db = {
-    MIBR: ['exit', 'insani', 'brnz4n', 'saffee', 'drop'],
-    'Natus Vincere': ['jL', 'iM', 'Aleksib', 'w0nderful', 'b1t'],
-    Heroic: ['sjuush', 'TeSeS', 'kyxe', 'NertZ', 'degster'],
-    G2: ['Snax', 'm0NESY', 'huNter-', 'NiKo', 'malbsMd'],
-    NRG: ['autimatic', 'oSee', 'Brehze', 'HexT', 'Walco'],
-    Monte: ['r3salt', 'Krasnal', 'demqq', 'Staehr', 'hadji']
-  };
-
-  const getPlayers = (team) => db[team] || Array.from({ length: 5 }, (_, i) => `${team}_Pro_${i + 1}`);
-
-  const players = [];
-
-  getPlayers(t1).forEach((p) => {
-    players.push({
-      match_id: matchId,
-      player_name: p,
-      team_name: t1,
-      rating: (Math.random() * 0.4 + 1.05).toFixed(2),
-      adr: (Math.random() * 15 + 75).toFixed(1),
-      kast: '74%'
-    });
-  });
-
-  getPlayers(t2).forEach((p) => {
-    players.push({
-      match_id: matchId,
-      player_name: p,
-      team_name: t2,
-      rating: (Math.random() * 0.4 + 1.05).toFixed(2),
-      adr: (Math.random() * 15 + 75).toFixed(1),
-      kast: '74%'
-    });
-  });
-
-  return players;
-}
-
-syncUpcoming();
+syncPandaScore();
