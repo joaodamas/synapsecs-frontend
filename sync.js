@@ -10,6 +10,8 @@ if (!supabaseUrl || !supabaseServiceKey || !pandaKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const teamCache = new Map();
+const playerStatsCache = new Map();
+let statsAccessDenied = false;
 
 const brTeams = new Set(['FURIA', 'Imperial', 'paiN', 'MIBR', 'Legacy', 'Fluxo', 'RED Canids', 'Vasco Esports']);
 const activeMaps = ['Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis', 'Vertigo', 'Dust2', 'Overpass'];
@@ -151,6 +153,7 @@ async function getTeamPlayers(teamId) {
 
 async function getPlayerStats(matchId, playerId) {
   if (!matchId || !playerId) return null;
+  if (statsAccessDenied) return null;
   try {
     const data = await fetchPandaScore(
       `/csgo/matches/${matchId}/players/${playerId}/stats`
@@ -158,12 +161,80 @@ async function getPlayerStats(matchId, playerId) {
     if (Array.isArray(data)) return data[0] || null;
     return data || null;
   } catch (error) {
+    if (String(error.message).includes("403")) {
+      statsAccessDenied = true;
+    }
     console.warn(
       `⚠️ Sem stats para match ${matchId} player ${playerId}:`,
       error.message
     );
     return null;
   }
+}
+
+async function fetchPastMatches(teamId) {
+  if (!teamId) return [];
+  const candidates = [
+    `/csgo/matches/past?filter[opponent_id]=${teamId}&filter[detailed_stats]=true&per_page=10`,
+    `/cs2/matches/past?filter[opponent_id]=${teamId}&filter[detailed_stats]=true&per_page=10`
+  ];
+
+  for (const path of candidates) {
+    try {
+      const data = await fetchPandaScore(path);
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      if (!String(error.message).includes("404")) {
+        throw error;
+      }
+    }
+  }
+
+  return [];
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+async function getPlayerHistoricalStats(playerId, matchIds) {
+  if (!playerId || !matchIds.length || statsAccessDenied) return null;
+  if (playerStatsCache.has(playerId)) return playerStatsCache.get(playerId);
+
+  let ratingSum = 0;
+  let adrSum = 0;
+  let kastSum = 0;
+  let count = 0;
+
+  for (const matchId of matchIds) {
+    const stats = await getPlayerStats(matchId, playerId);
+    if (!stats) continue;
+
+    const rating = toNumber(stats?.rating ?? stats?.performance?.rating);
+    const adr = toNumber(stats?.adr ?? stats?.performance?.adr);
+    const kast = toNumber(stats?.kast ?? stats?.performance?.kast);
+
+    if (rating !== null) ratingSum += rating;
+    if (adr !== null) adrSum += adr;
+    if (kast !== null) kastSum += kast;
+    count += 1;
+  }
+
+  if (!count) {
+    playerStatsCache.set(playerId, null);
+    return null;
+  }
+
+  const averaged = {
+    rating: Number((ratingSum / count).toFixed(2)),
+    adr: Number((adrSum / count).toFixed(1)),
+    kast: Number((kastSum / count).toFixed(1))
+  };
+
+  playerStatsCache.set(playerId, averaged);
+  return averaged;
 }
 
 async function syncPandaScore() {
@@ -231,8 +302,21 @@ async function syncPandaScore() {
 
       await supabase.from('players').delete().eq('match_id', savedMatch.id);
 
-      const rosterA = await getTeamPlayers(teamAId);
-      const rosterB = await getTeamPlayers(teamBId);
+      const [rosterA, rosterB, pastMatchesA, pastMatchesB] = await Promise.all([
+        getTeamPlayers(teamAId),
+        getTeamPlayers(teamBId),
+        fetchPastMatches(teamAId),
+        fetchPastMatches(teamBId)
+      ]);
+
+      const pastMatchIds = [
+        ...new Set(
+          [...pastMatchesA, ...pastMatchesB]
+            .map((pastMatch) => pastMatch?.id)
+            .filter(Boolean)
+        )
+      ];
+
       console.log(
         `ℹ️ Elencos: ${teamA.name} (${rosterA.length}) | ${teamB.name} (${rosterB.length})`
       );
@@ -240,14 +324,14 @@ async function syncPandaScore() {
       const players = [];
 
       for (const player of roster) {
-        const stats = await getPlayerStats(savedMatch.id, player.player_id);
+        const stats = await getPlayerHistoricalStats(player.player_id, pastMatchIds);
         players.push({
           match_id: savedMatch.id,
           player_name: player.player_name,
           team_name: player.team_name,
-          rating: stats?.rating ?? stats?.performance?.rating ?? player.rating,
-          adr: stats?.adr ?? stats?.performance?.adr ?? player.adr,
-          kast: stats?.kast ?? stats?.performance?.kast ?? player.kast
+          rating: stats?.rating ?? player.rating,
+          adr: stats?.adr ?? player.adr,
+          kast: stats?.kast ?? player.kast
         });
       }
 
