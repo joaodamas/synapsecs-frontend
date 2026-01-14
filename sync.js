@@ -54,6 +54,16 @@ async function fetchTeamById(teamId) {
   return null;
 }
 
+function extractTeamRank(team) {
+  return (
+    team?.ranking ??
+    team?.rank ??
+    team?.current_ranking ??
+    team?.current_rank ??
+    null
+  );
+}
+
 async function getTeamPlayers(teamId) {
   if (!teamId) return [];
   if (teamCache.has(teamId)) return teamCache.get(teamId);
@@ -101,6 +111,14 @@ async function syncPandaScore() {
 
       console.log(`🎮 Sincronizando: ${teamA.name} vs ${teamB.name}`);
 
+      const [teamAInfo, teamBInfo] = await Promise.all([
+        fetchTeamById(teamA.id),
+        fetchTeamById(teamB.id)
+      ]);
+
+      const rankA = extractTeamRank(teamAInfo);
+      const rankB = extractTeamRank(teamBInfo);
+
       const { data: savedMatch, error: matchError } = await supabase
         .from('matches')
         .upsert({
@@ -112,7 +130,9 @@ async function syncPandaScore() {
           prob_b: 50,
           status: match.status || 'upcoming',
           match_date: match.begin_at || match.scheduled_at || new Date().toISOString(),
-          is_brazilian: brTeams.has(teamA.name) || brTeams.has(teamB.name)
+          is_brazilian: brTeams.has(teamA.name) || brTeams.has(teamB.name),
+          rank_a: rankA,
+          rank_b: rankB
         })
         .select()
         .single();
