@@ -28,7 +28,6 @@ async function syncUpcoming() {
       console.log('⚠️ Nenhuma partida futura encontrada. Usando as 10 primeiras com times definidos.');
       futureMatches = allMatches.filter((m) => m.team1 && m.team2).slice(0, 10);
     }
-    }
 
     await supabase.from('players').delete().neq('id', 0);
     await supabase.from('matches').delete().neq('id', 0);
